@@ -8,25 +8,25 @@ output "key_vault_uri" {
   value       = module.key_vault.vault_uri
 }
 
-output "redis_hostname" {
-  description = "Hostname del Redis Cache."
-  value       = module.redis_cache.redis_hostname
-}
-
-output "redis_ssl_port" {
-  description = "Puerto SSL del Redis Cache (6380)."
-  value       = module.redis_cache.redis_ssl_port
-}
-
-output "cosmosdb_name" {
-  description = "Nombre de la cuenta CosmosDB creada."
-  value       = module.cosmosdb.cosmosdb_name
-}
-
-output "cosmosdb_endpoint" {
-  description = "Endpoint de la cuenta CosmosDB (SQL API)."
-  value       = module.cosmosdb.cosmosdb_endpoint
-}
+# output "redis_hostname" {
+#   description = "Hostname del Redis Cache."
+#   value       = module.redis_cache.redis_hostname
+# }
+#
+# output "redis_ssl_port" {
+#   description = "Puerto SSL del Redis Cache (6380)."
+#   value       = module.redis_cache.redis_ssl_port
+# }
+#
+# output "cosmosdb_name" {
+#   description = "Nombre de la cuenta CosmosDB creada."
+#   value       = module.cosmosdb.cosmosdb_name
+# }
+#
+# output "cosmosdb_endpoint" {
+#   description = "Endpoint de la cuenta CosmosDB (SQL API)."
+#   value       = module.cosmosdb.cosmosdb_endpoint
+# }
 
 output "resumen" {
   description = "Resumen de los recursos creados por este alumno."
@@ -34,9 +34,9 @@ output "resumen" {
     alumno         = var.owner_alias
     resource_group = var.resource_group_name
     region         = var.location
-    key_vault      = module.key_vault.vault_name
-    redis          = module.redis_cache.redis_hostname
-    cosmosdb       = module.cosmosdb.cosmosdb_name
+#     key_vault      = module.key_vault.vault_name
+#     redis          = module.redis_cache.redis_hostname
+#     cosmosdb       = module.cosmosdb.cosmosdb_name
   }
 }
 
