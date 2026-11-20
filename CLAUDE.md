@@ -47,7 +47,7 @@ terraform destroy -auto-approve
 
 Run a single policy:
 ```bash
-conftest test plan.json -p ../../policy/azure_location.rego
+conftest test plan.json -p ../../policy/azure_redis_secure.rego
 ```
 
 `plan.tfplan` and `plan.json` are generated artifacts — do not commit them.
@@ -69,6 +69,9 @@ module "key_vault"      →  modules/key-vault/
 
 module "redis_cache"    →  modules/redis-cache/
     outputs: redis_hostname, redis_ssl_port, redis_primary_connection_string (sensitive)
+    optional Private Endpoint (redis_enable_private_endpoint): looks up an EXISTING VNet
+    (redis_vnet_name, in the same resource group), creates a subnet in it plus a private DNS zone.
+    Requires Standard/Premium SKU; with it enabled, `plan` fails if the VNet doesn't exist.
 
 module "cosmosdb"       →  modules/cosmosdb/
     outputs: cosmosdb_name, cosmosdb_endpoint, cosmosdb_primary_key (sensitive), cosmosdb_connection_strings (sensitive)
@@ -77,18 +80,20 @@ module "cosmosdb"       →  modules/cosmosdb/
 `key_vault` requires `data "azurerm_client_config" "current"` for the tenant ID. `cosmosdb` uses SQL API (`kind = "GlobalDocumentDB"`) with `consistency_level = "Session"` by default.
 
 The `locals` block builds naming patterns:
-- **Storage Account**: `"st" + alias(10) + env(3) + md5hash(6)` — alphanumeric only, max 24 chars
+- **Storage Account** (`local.storage_name`, no storage module in this repo yet): `"st" + alias(10) + env(3) + md5hash(6)` — alphanumeric only, max 24 chars
 - **Key Vault**: `"kv-" + alias(8) + "-" + env(3) + "-" + md5hash(5)` — must start with a letter, max 24 chars, globally unique in Azure
 
-All four required tags (`Environment`, `ManagedBy`, `Owner`, `CostCenter`) must appear on every taggable resource or the OPA policies will block apply. These are set in `local.common_tags` in `main.tf`.
+All four required tags (`Environment`, `ManagedBy`, `Owner`, `CostCenter`) should appear on every taggable resource (enforced by `azure_required_tags.rego` once present). These are set in `local.common_tags` in `main.tf`.
 
-### Intentional policy violation (lab exercise)
+### Lab exercise: policy violation
 
-`environments/dev/main.tf:62` sets `soft_delete_retention_days = 6`, which deliberately fails `azure_keyvault_secure.rego` (requires >= 7). This is intentional — students are meant to observe the policy block, then fix it to `>= 7` to pass.
+`environments/dev/main.tf:62` currently sets `soft_delete_retention_days = 7` (compliant). The lab's exercise is to observe `azure_keyvault_secure.rego` block a value `< 7` and then fix it. Note the module's `variables.tf` also validates 7–90, so values below 7 fail at `terraform validate`/`plan` before reaching conftest.
 
 ## OPA policies (`policy/`)
 
 All policies use `package main` and the `deny` rule pattern — a non-empty `deny` set causes `conftest` to exit non-zero. Policies receive `plan.json` as `input`; resources are read from `input.resource_changes[_]`.
+
+Only `azure_keyvault_secure.rego` and `azure_redis_secure.rego` exist in `policy/` right now; the other four rows below describe the base lab's policies and are **not present** in this repo (add them before relying on them, e.g. the tags policy).
 
 | Policy file | What it enforces |
 |---|---|

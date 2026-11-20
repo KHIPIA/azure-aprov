@@ -63,24 +63,19 @@ module "key_vault" {
   tags                       = local.common_tags
 }
 
-# ── Módulo 5: Redis Cache ─────────────────────────────────────
-# Caché en memoria para la aplicación — solo SSL, TLS 1.2
-module "redis_cache" {
-  source = "../../modules/redis-cache"
 
-  name                = "redis-${local.suffix}"
+# ── AKS (demos) ───────────────────────────────────────────────
+# Cluster mínimo: 1 nodo, tier Free
+module "aks" {
+  source = "../../modules/aks"
+
+  name                = "aks-${local.suffix}"
   resource_group_name = var.resource_group_name
   location            = var.location
-  capacity            = var.redis_capacity
-  family              = var.redis_family
-  sku_name            = var.redis_sku
   tags                = local.common_tags
-
-  enable_private_endpoint  = var.redis_enable_private_endpoint
-  vnet_name                = var.redis_vnet_name
-  pe_subnet_address_prefix = var.redis_pe_subnet_prefix
 }
 
+/*
 # ── Módulo 6: CosmosDB ────────────────────────────────────────
 # Base de datos NoSQL globalmente distribuida (SQL API)
 module "cosmosdb" {
@@ -92,3 +87,4 @@ module "cosmosdb" {
   consistency_level   = "Session"
   tags                = local.common_tags
 }
+ */

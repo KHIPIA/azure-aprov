@@ -39,3 +39,8 @@ output "resumen" {
     cosmosdb       = module.cosmosdb.cosmosdb_name
   }
 }
+
+output "aks_name" {
+  description = "Nombre del cluster AKS."
+  value       = module.aks.aks_name
+}
