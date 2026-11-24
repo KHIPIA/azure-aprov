@@ -34,6 +34,7 @@ output "resumen" {
     alumno         = var.owner_alias
     resource_group = var.resource_group_name
     region         = var.location
+    acr            = module.acr.acr_name
 #     key_vault      = module.key_vault.vault_name
 #     redis          = module.redis_cache.redis_hostname
 #     cosmosdb       = module.cosmosdb.cosmosdb_name
@@ -43,4 +44,14 @@ output "resumen" {
 output "aks_name" {
   description = "Nombre del cluster AKS."
   value       = module.aks.aks_name
+}
+
+output "acr_name" {
+  description = "Nombre del Azure Container Registry."
+  value       = module.acr.acr_name
+}
+
+output "acr_login_server" {
+  description = "Login server del ACR (para docker push / imágenes en AKS)."
+  value       = module.acr.acr_login_server
 }

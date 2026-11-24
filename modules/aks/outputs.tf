@@ -8,3 +8,8 @@ output "kube_config_raw" {
   value       = azurerm_kubernetes_cluster.this.kube_config_raw
   sensitive   = true
 }
+
+output "kubelet_object_id" {
+  description = "Object ID de la identidad kubelet (para asignarle AcrPull sobre el ACR)."
+  value       = azurerm_kubernetes_cluster.this.kubelet_identity[0].object_id
+}

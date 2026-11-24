@@ -40,6 +40,10 @@ locals {
   # "kv-" (3) + alias (max 8) + "-" + env (max 3) + "-" + hash (5) = max 21 chars
   keyvault_name = "kv-${substr(var.owner_alias, 0, 8)}-${substr(var.environment, 0, 3)}-${substr(md5(var.resource_group_name), 0, 5)}"
 
+  # Nombre del ACR: solo alfanumérico, 5–50 chars, globalmente único
+  # "acr" (3) + alias (max 10) + env (3) + hash (6) = max 22 chars
+  acr_name = "acr${var.owner_alias}${substr(var.environment, 0, 3)}${substr(md5(var.resource_group_name), 0, 6)}"
+
   # Tags comunes — la política OPA verifica que todos existan
   common_tags = {
     Environment = var.environment
@@ -73,6 +77,29 @@ module "aks" {
   resource_group_name = var.resource_group_name
   location            = var.location
   tags                = local.common_tags
+}
+
+
+# ── ACR (Azure Container Registry) ────────────────────────────
+# Registro privado de imágenes para el cluster AKS
+module "acr" {
+  source = "../../modules/acr"
+
+  name                = local.acr_name
+  resource_group_name = var.resource_group_name
+  location            = var.location
+  sku                 = "Basic"
+  tags                = local.common_tags
+}
+
+# Composición: output de AKS (identidad kubelet) + output de ACR (scope)
+# Permite al cluster hacer pull de imágenes del registro.
+# Requiere rol Owner o User Access Administrator sobre el RG.
+resource "azurerm_role_assignment" "aks_acr_pull" {
+  scope                            = module.acr.acr_id
+  role_definition_name             = "AcrPull"
+  principal_id                     = module.aks.kubelet_object_id
+  skip_service_principal_aad_check = true
 }
 
 /*

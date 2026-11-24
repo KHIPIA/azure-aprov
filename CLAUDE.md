@@ -4,18 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this repo is
 
-A Terraform + OPA/Rego lab for Azure (UTEC Posgrado, Module 4, Session 3). It deploys resources via reusable Terraform modules, then validates the plan with Conftest before applying. The `propuesto.md` exercise asked for three new modules and two new OPA policies — those are the three modules in `modules/` and the two policies for Key Vault and Redis.
+A Terraform + OPA/Rego lab for Azure (UTEC Posgrado, Module 4, Session 3). Resources are deployed through reusable local Terraform modules, and the plan is validated with Conftest before `apply`. `propuesto.md` is the exercise: build 3 resources using modules and write 2 policy-as-code rules for them. Comments and docs are in Spanish.
+
+The top-level `README.md`, `environments/dev/README.md` and `policy/README.md` describe the **base lab** (log-analytics, storage, container-apps modules and four policies). None of that code is in this repo. Use the READMEs for workflow only, not as a description of the code.
 
 ## Tools required
 
-- Terraform >= 1.5.0
-- Azure CLI >= 2.50
-- conftest >= 0.45.0 (OPA policy runner)
-
-```bash
-# Verify installations
-terraform version && az version && conftest --version
-```
+Terraform >= 1.5.0, Azure CLI >= 2.50, conftest >= 0.45.0. The provider is pinned to `azurerm ~> 3.90` in `environments/dev/main.tf` and in every module, so use 3.x attribute names (for example `enable_rbac_authorization`, not the 4.x `rbac_authorization_enabled`).
 
 ## Workflow
 
@@ -23,91 +18,56 @@ All Terraform commands run from `environments/dev/`:
 
 ```bash
 cd environments/dev/
-
-# Syntax check (no Azure auth required)
-terraform validate
-
-# Init (first time or after module changes)
-terraform init
-
-# Plan and export as JSON (required for policy validation)
+terraform init                      # first time or after adding/changing a module source
+terraform validate                  # no Azure auth needed (after init)
 terraform plan -out=plan.tfplan
 terraform show -json plan.tfplan > plan.json
-
-# Validate policies before applying
-conftest test plan.json -p ../../policy/
-conftest test plan.json -p ../../policy/ -o table   # table format, easier to read
-
-# Apply only if policies pass
+conftest test plan.json -p ../../policy/              # all policies
+conftest test plan.json -p ../../policy/ -o table     # tabular output
+conftest test plan.json -p ../../policy/azure_keyvault_secure.rego   # single policy
 conftest test plan.json -p ../../policy/ && terraform apply plan.tfplan
-
-# Tear down
 terraform destroy -auto-approve
 ```
 
-Run a single policy:
-```bash
-conftest test plan.json -p ../../policy/azure_redis_secure.rego
-```
+`plan.tfplan`, `plan.json`, `.terraform/` and state files are generated artifacts. The repo has no `.gitignore`, so check `git status` before committing.
 
-`plan.tfplan` and `plan.json` are generated artifacts — do not commit them.
+Auth: `az login && az account set --subscription "<ID>"`.
 
 ## Per-student configuration
 
-The only file each user should edit is `environments/dev/terraform.tfvars`. Set:
-- `resource_group_name` — assigned by the instructor (e.g. `rg-alumno-01`)
-- `owner_alias` — unique lowercase alias, 2–10 alphanumeric chars (regex `^[a-z0-9]{2,10}$`), used as a suffix on all resource names to avoid collisions
+Edit only `environments/dev/terraform.tfvars`: `resource_group_name` (an existing RG assigned by the instructor; Terraform does not create it) and `owner_alias` (`^[a-z0-9]{2,10}$`, used as a suffix in every resource name).
 
 ## Architecture
 
-`environments/dev/main.tf` wires three modules (the exercise additions — the base lab's `log_analytics`, `storage`, and `container_apps` modules referenced in the file's header comment are not present in this repo):
+`environments/dev/main.tf` is the only root module. Current state of the modules:
 
-```
-module "key_vault"      →  modules/key-vault/
-    inputs: data.azurerm_client_config.current.tenant_id
-    outputs: vault_name, vault_uri
+| Module | Wired in `main.tf`? | Notes |
+|---|---|---|
+| `modules/key-vault/` | yes | Needs `data.azurerm_client_config.current.tenant_id`. RBAC on, `purge_protection_enabled = false` so the lab can be destroyed. The module validates `soft_delete_retention_days` to 7–90. |
+| `modules/aks/` | yes | Minimal demo cluster: Free tier, 1 node, `Standard_B2s` (falls back to `Standard_D2s_v3` if quota fails), kubenet, SystemAssigned identity. `kube_config_raw` output is sensitive and is not re-exported. |
+| `modules/acr/` | yes | Container Registry, `Basic` SKU, `admin_enabled = false`. `main.tf` also creates `azurerm_role_assignment.aks_acr_pull` (AcrPull on the ACR for `module.aks.kubelet_object_id`). That assignment needs Owner/User Access Administrator on the RG, or `apply` fails after the registry is created. |
+| `modules/cosmosdb/` | commented out | SQL API (`GlobalDocumentDB`), `consistency_level` defaults to `Session`. Its outputs in `outputs.tf` are commented out too. |
 
-module "redis_cache"    →  modules/redis-cache/
-    outputs: redis_hostname, redis_ssl_port, redis_primary_connection_string (sensitive)
-    optional Private Endpoint (redis_enable_private_endpoint): looks up an EXISTING VNet
-    (redis_vnet_name, in the same resource group), creates a subnet in it plus a private DNS zone.
-    Requires Standard/Premium SKU; with it enabled, `plan` fails if the VNet doesn't exist.
+Redis Cache was removed (module and policy deleted). However, `environments/dev/variables.tf` still declares the `redis_*` variables and the base lab's `container_*`/replica variables, and `terraform.tfvars` sets some of them. They are unused but harmless. Remove them together if you clean up.
 
-module "cosmosdb"       →  modules/cosmosdb/
-    outputs: cosmosdb_name, cosmosdb_endpoint, cosmosdb_primary_key (sensitive), cosmosdb_connection_strings (sensitive)
-```
+When you enable or disable a module, keep `main.tf`, `outputs.tf` (including the `resumen` map) and `terraform.tfvars` in sync. An output that references a commented-out module breaks `plan`.
 
-`key_vault` requires `data "azurerm_client_config" "current"` for the tenant ID. `cosmosdb` uses SQL API (`kind = "GlobalDocumentDB"`) with `consistency_level = "Session"` by default.
+Naming, built in the `locals` block:
+- `local.suffix` = `"<alias>-<env>"`, e.g. `aks-<alias>-dev`, `cosmos-<alias>-dev`
+- `local.keyvault_name` = `kv-<alias[:8]>-<env[:3]>-<md5(rg)[:5]>`: starts with a letter, ≤24 chars, globally unique
+- `local.acr_name` = `acr<alias><env[:3]><md5(rg)[:6]>`: alphanumeric only, ≤22 chars, globally unique
+- `local.storage_name`: defined but unused (left over from the base lab)
 
-The `locals` block builds naming patterns:
-- **Storage Account** (`local.storage_name`, no storage module in this repo yet): `"st" + alias(10) + env(3) + md5hash(6)` — alphanumeric only, max 24 chars
-- **Key Vault**: `"kv-" + alias(8) + "-" + env(3) + "-" + md5hash(5)` — must start with a letter, max 24 chars, globally unique in Azure
-
-All four required tags (`Environment`, `ManagedBy`, `Owner`, `CostCenter`) should appear on every taggable resource (enforced by `azure_required_tags.rego` once present). These are set in `local.common_tags` in `main.tf`.
-
-### Lab exercise: policy violation
-
-`environments/dev/main.tf:62` currently sets `soft_delete_retention_days = 7` (compliant). The lab's exercise is to observe `azure_keyvault_secure.rego` block a value `< 7` and then fix it. Note the module's `variables.tf` also validates 7–90, so values below 7 fail at `terraform validate`/`plan` before reaching conftest.
+`local.common_tags` (`Environment`, `ManagedBy`, `Owner`, `CostCenter`) is passed as `tags` to every module. New modules should accept a `tags` variable and receive it.
 
 ## OPA policies (`policy/`)
 
-All policies use `package main` and the `deny` rule pattern — a non-empty `deny` set causes `conftest` to exit non-zero. Policies receive `plan.json` as `input`; resources are read from `input.resource_changes[_]`.
+Policies use `package main`, `import rego.v1` and `deny contains msg if { ... }`. Any `deny` message makes conftest exit non-zero. Input is `plan.json`. Filter `input.resource_changes[_]` by `type` and by `change.actions` in `{"create","update"}`, then read attributes with `object.get(r.change.after, ...)`. Message prefix convention: `❌ [<policy_name>] '<address>' ...`.
 
-Only `azure_keyvault_secure.rego` and `azure_redis_secure.rego` exist in `policy/` right now; the other four rows below describe the base lab's policies and are **not present** in this repo (add them before relying on them, e.g. the tags policy).
+Two policies exist (the two the exercise requires):
+- `azure_keyvault_secure.rego`: `enable_rbac_authorization = true`, `soft_delete_retention_days >= 7`
+- `azure_acr_secure.rego`: `admin_enabled = false`, `sku` in `{"Basic","Standard"}` (Premium denied)
 
-| Policy file | What it enforces |
-|---|---|
-| `azure_required_tags.rego` | Tags `Environment`, `ManagedBy`, `Owner`, `CostCenter` on all resources (empty tags also fail) |
-| `azure_storage_secure.rego` | `allow_nested_items_to_be_public = false`, TLS 1.2+, HTTPS only |
-| `azure_container_resources.rego` | CPU ≤ 1.0 vCPU, RAM ≤ 2Gi, replicas ≤ 5 |
-| `azure_location.rego` | Only `eastus`, `eastus2`, `westus2` |
-| `azure_keyvault_secure.rego` | `enable_rbac_authorization = true`, `soft_delete_retention_days >= 7` |
-| `azure_redis_secure.rego` | `enable_non_ssl_port = false`, `minimum_tls_version = "1.2"` |
+Since both files are `package main`, rule/variable names must not collide across files. The base-lab policies listed in the READMEs (tags, storage, container resources, location) are not present.
 
-## Azure authentication
-
-```bash
-az login
-az account set --subscription "<SUBSCRIPTION_ID>"
-az account show --query '{Nombre:name, ID:id}' --output table
-```
+Lab exercise: setting the Key Vault `soft_delete_retention_days` below 7 in `main.tf` is meant to show the policy blocking the plan. But the module's variable validation rejects values below 7 at `plan` time, before conftest runs. To see the Rego deny itself, relax the validation in `modules/key-vault/variables.tf`.
