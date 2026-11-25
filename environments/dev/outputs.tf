@@ -35,6 +35,7 @@ output "resumen" {
     resource_group = var.resource_group_name
     region         = var.location
     acr            = module.acr.acr_name
+    apim           = module.apim.apim_name
 #     key_vault      = module.key_vault.vault_name
 #     redis          = module.redis_cache.redis_hostname
 #     cosmosdb       = module.cosmosdb.cosmosdb_name
@@ -54,4 +55,14 @@ output "acr_name" {
 output "acr_login_server" {
   description = "Login server del ACR (para docker push / imágenes en AKS)."
   value       = module.acr.acr_login_server
+}
+
+output "apim_name" {
+  description = "Nombre del servicio API Management."
+  value       = module.apim.apim_name
+}
+
+output "apim_gateway_url" {
+  description = "URL del gateway de API Management."
+  value       = module.apim.apim_gateway_url
 }

@@ -123,3 +123,15 @@ variable "redis_pe_subnet_prefix" {
   type        = string
   default     = "10.28.2.0/24"
 }
+
+# ── API Management ────────────────────────────────────────────
+variable "apim_publisher_name" {
+  description = "Nombre de la organización publicadora en API Management."
+  type        = string
+  default     = "UTEC Posgrado"
+}
+
+variable "apim_publisher_email" {
+  description = "Email del publicador de API Management (obligatorio en Azure)."
+  type        = string
+}

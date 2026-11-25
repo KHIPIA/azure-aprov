@@ -44,6 +44,10 @@ locals {
   # "acr" (3) + alias (max 10) + env (3) + hash (6) = max 22 chars
   acr_name = "acr${var.owner_alias}${substr(var.environment, 0, 3)}${substr(md5(var.resource_group_name), 0, 6)}"
 
+  # Nombre de APIM: empieza con letra, letras/números/guiones, globalmente único
+  # "apim-" (5) + alias (max 10) + "-" + env + "-" + hash (5) = ~26 chars
+  apim_name = "apim-${local.suffix}-${substr(md5(var.resource_group_name), 0, 5)}"
+
   # Tags comunes — la política OPA verifica que todos existan
   common_tags = {
     Environment = var.environment
@@ -100,6 +104,21 @@ resource "azurerm_role_assignment" "aks_acr_pull" {
   role_definition_name             = "AcrPull"
   principal_id                     = module.aks.kubelet_object_id
   skip_service_principal_aad_check = true
+}
+
+
+# ── API Management ────────────────────────────────────────────
+# Gateway de APIs, SKU Developer (sin SLA, ~30–60 min en aprovisionar)
+module "apim" {
+  source = "../../modules/apim"
+
+  name                = local.apim_name
+  resource_group_name = var.resource_group_name
+  location            = var.location
+  publisher_name      = var.apim_publisher_name
+  publisher_email     = var.apim_publisher_email
+  sku_name            = "Developer_1"
+  tags                = local.common_tags
 }
 
 /*

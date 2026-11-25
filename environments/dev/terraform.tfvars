@@ -1,11 +1,12 @@
 # =============================================================
 #  terraform.tfvars — Configuración por alumno
-#  ⚠️ EDITA SOLO LAS DOS LÍNEAS MARCADAS CON ←
+#  ⚠️ EDITA SOLO LAS TRES LÍNEAS MARCADAS CON ←
 # =============================================================
 
 # ── EDITAR ESTOS VALORES ──────────────────────────────────────
-resource_group_name = "RG-KHIPIA"   # ← Tu RG asignado por el docente
-owner_alias         = "khipia"       # ← Tu alias único (2-10 chars, sin espacios)
+resource_group_name  = "RG-KHIPIA"            # ← Tu RG asignado por el docente
+owner_alias          = "khipia"               # ← Tu alias único (2-10 chars, sin espacios)
+apim_publisher_email = "tu-email@ejemplo.com"  # ← Email del publisher de APIM
 # ─────────────────────────────────────────────────────────────
 
 # Valores comunes para toda la clase (no modificar)
